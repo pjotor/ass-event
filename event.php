@@ -9,6 +9,7 @@ include($phpbb_root_path . 'includes/functions_display.' . $phpEx);
 $user->session_begin();
 $auth->acl($user->data);
 
+//The different user types in phpBB
 /*
 define('USER_NORMAL', 0);
 define('USER_INACTIVE', 1);
@@ -16,6 +17,7 @@ define('USER_IGNORE', 2);
 define('USER_FOUNDER', 3);
 */
 
+//The event-page uses a table looking like this
 /*
 CREATE TABLE IF NOT EXISTS `events` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -32,6 +34,7 @@ CREATE TABLE IF NOT EXISTS `events` (
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_bin AUTO_INCREMENT=6 ;
 */
 
+// iCal class from http://jamiebicknell.tumblr.com/post/413492676/ics-generator-php-class
 class ICS {
     var $data;
     var $name;
@@ -51,8 +54,10 @@ class ICS {
     }
 }
 
+//Setup defaults for these flags
 $adminMod = false;
 $canAdd = false;
+//Change this to wherever you have the table
 $eventsTable = "`forum_test`.`events`";
 
 // Set admin/loggedin 
@@ -67,7 +72,7 @@ if ($auth->acl_gets('a_', 'm_')) {
 	}
 }
 
-//Get posts
+//Get posts and filter
 $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
 $location = filter_input(INPUT_POST, 'location', FILTER_SANITIZE_STRING);
 $forum = filter_input(INPUT_POST, 'thread', FILTER_SANITIZE_URL);
@@ -123,6 +128,7 @@ if( isset($_GET["edit"]) && $canAdd ) {
 	$sql = "SELECT `id`, `name`, `user_id`, `updated`, `date`, `location`, `forum_url`, `desc`
 		FROM $eventsTable WHERE id = $event_id AND (user_id = {$user->data['user_id']} OR 1 = $admin);";
 	
+	//Set some default values
 	$edit_event = array(
 		"id" => '',
 		"name" => '',
@@ -154,6 +160,9 @@ if( isset($_GET["edit"]) && $canAdd ) {
   <meta http-equiv="content-type" content="text/html; charset=UTF-8">
   <title></title>
 
+  <!-- 
+  The bootstrap stuff is not realy working...
+  //-->
   <link rel="stylesheet" type="text/css" href="http://twitter.github.io/bootstrap/1.4.0/bootstrap.min.css">
   
   <script type='text/javascript' src="http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.1.0/bootstrap.min.js"></script>
@@ -161,7 +170,6 @@ if( isset($_GET["edit"]) && $canAdd ) {
   <link rel="stylesheet" type="text/css" href="http://code.jquery.com/ui/1.9.2/themes/base/jquery-ui.css">  
   <script type='text/javascript' src='//code.jquery.com/jquery-1.9.1.js'></script>
   <script type="text/javascript" src="http://code.jquery.com/ui/1.9.2/jquery-ui.js"></script>  
-  <script type="text/javascript" src="event_script/jquery.icalendar.js"></script> 
 
   <style type='text/css'>
     #map { width: 600px; height: 500px; }
@@ -170,6 +178,7 @@ if( isset($_GET["edit"]) && $canAdd ) {
 </head>
 <body>
 
+	<!-- New/Edit event -->
 	<div id="event">
 		<form class="form-horizontal" method="POST" action="event.php" name="event_form" id="event_form">
 		<fieldset>
@@ -255,6 +264,7 @@ if( isset($_GET["edit"]) && $canAdd ) {
   <div id="map"></div>
   
  <?php 
+	//Determine if the user can add events, duh...
 	if($canAdd) {
 ?>	
 	<button id="new">
@@ -263,6 +273,12 @@ if( isset($_GET["edit"]) && $canAdd ) {
 <?php } ?>				
 
 <?php
+
+/*
+	These should be presented in a better way
+*/
+
+//Show a list of active events in the future
 $sql = 'SELECT id, name, location, date, forum_url, user_id
 	FROM ' . $eventsTable . '
 	WHERE inactive = 0 AND date > CURRENT_TIMESTAMP	
@@ -299,6 +315,7 @@ $db->sql_freeresult($result);
 
 echo "\n<hr />\n";
 
+//Set up a JSON-object with all events in the list
 echo "<script>\n";
 echo "var marker_points = " .  json_encode($events) . ";\n";
 echo "</script>\n";
@@ -306,6 +323,7 @@ echo "</script>\n";
 
 echo "\n<hr />\n";
 
+//Show a specific event
 $event_id = filter_input(INPUT_GET, 'event', FILTER_SANITIZE_NUMBER_INT);
 
 if( $event_id ) {
@@ -344,12 +362,14 @@ $(window).load(function(){
 	
 	$("#map, #event").hide();
 
+	//The map dialog
 	$( "#map" ).dialog({
 	autoOpen: false,
 	minHeight: 500, 
 	minWidth: 500
 	});
 	
+	//Show map when adding event
 	$( "#showMap" ).click(function() {
 		$( "#map" )
 			.dialog("option", "open", function(){
@@ -376,6 +396,7 @@ $(window).load(function(){
 			.dialog( "open" );
 	});	
 	
+	//Auto open event if you can and want to edit it
 	$( "#event" ).dialog({ 
 		autoOpen:  <?= (isset($_GET["edit"]) && $edit_event["edit"]) ? "true" : "false" ?>,
 		minHeight: 600, 
@@ -386,6 +407,7 @@ $(window).load(function(){
 		$( "#event" ).dialog( "open" );
 	});		
 	
+	//Show location of event
 	$(".loc").click(function(){
 		if(!map) {
 			alert("Kartan gick inte att ladda.");
@@ -418,6 +440,7 @@ $(window).load(function(){
 		
 	});
 	
+	//Show all events on map - TODO
 	$("#all_map").click(function(){
 		var point, latlng, mark;
 		var bounds=new google.maps.LatLngBounds();
@@ -459,6 +482,7 @@ $(window).load(function(){
 	});
 });
 
+//Google map init load/init functions
 var marker;
 var map = false;
 
