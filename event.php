@@ -1,24 +1,17 @@
 ﻿<?php
-define('IN_PHPBB', true);
-$phpbb_root_path = (defined('PHPBB_ROOT_PATH')) ? PHPBB_ROOT_PATH : './';
-$phpEx = substr(strrchr(__FILE__, '.'), 1);
-include($phpbb_root_path . 'common.' . $phpEx);
-include($phpbb_root_path . 'includes/functions_display.' . $phpEx);
+/**********************************************************
 
-// Start session management
-$user->session_begin();
-$auth->acl($user->data);
+A quick hack to add/list events created by users of a phpBB3 board.
+Features:
+	* All active users can make events
+	* All events has a Name, a Date, a Location and a link to a forum thread 
+	* All events can have a Descript, optional
+	* A user can edit their event, admins and moderators can also edit
 
-//The different user types in phpBB
-/*
-define('USER_NORMAL', 0);
-define('USER_INACTIVE', 1);
-define('USER_IGNORE', 2);
-define('USER_FOUNDER', 3);
-*/
+Usage:
+	* Create the table for the events
 
 //The event-page uses a table looking like this
-/*
 CREATE TABLE IF NOT EXISTS `events` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(140) COLLATE utf8_bin NOT NULL,
@@ -31,8 +24,21 @@ CREATE TABLE IF NOT EXISTS `events` (
   `forum_url` varchar(240) COLLATE utf8_bin NOT NULL,
   `desc` varchar(300) COLLATE utf8_bin NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_bin AUTO_INCREMENT=6 ;
-*/
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_bin AUTO_INCREMENT=6 ;	
+	
+	* Add this file to the phpBB root directory.
+
+**********************************************************/
+
+define('IN_PHPBB', true);
+$phpbb_root_path = (defined('PHPBB_ROOT_PATH')) ? PHPBB_ROOT_PATH : './';
+$phpEx = substr(strrchr(__FILE__, '.'), 1);
+include($phpbb_root_path . 'common.' . $phpEx);
+include($phpbb_root_path . 'includes/functions_display.' . $phpEx);
+
+// Start session management
+$user->session_begin();
+$auth->acl($user->data);
 
 // iCal class from http://jamiebicknell.tumblr.com/post/413492676/ics-generator-php-class
 class ICS {
@@ -80,7 +86,9 @@ $desc = filter_input(INPUT_POST, 'desc', FILTER_SANITIZE_STRING);
 $date = strtotime($_POST["date"]);
 $mysqldate = date( 'Y-m-d H:i:s', $date );
 $event_id = filter_input(INPUT_POST, 'id', FILTER_SANITIZE_NUMBER_INT);
-
+$inactive = isset($_POST['deactivated']) ? 1 : 0;
+$admin = $adminMod ? 1 : 0;
+	
 //iCal
 if(isset($_GET["ical"])){
 	$event_id = filter_input(INPUT_GET, 'ical', FILTER_SANITIZE_NUMBER_INT);
@@ -104,7 +112,7 @@ if( $event_id > 0 && $canAdd ) {
 	$sql = "UPDATE $eventsTable 
 		SET 
 		`name` = '$name', `date` = '$mysqldate', `location` = '$location', 
-		`forum_url` = '$forum', `desc` = '$desc', `updated` =  CURRENT_TIMESTAMP 
+		`forum_url` = '$forum', `desc` = '$desc', `updated` =  CURRENT_TIMESTAMP, `inactive` = $inactive
 		WHERE `events`.`id` = $event_id AND `events`.`user_id` = {$user->data['user_id']};";
 		
 	$result = $db->sql_query($sql);
@@ -113,19 +121,18 @@ if( $event_id > 0 && $canAdd ) {
 //Add
 if( $event_id < 1 && isset($_POST["name"]) && $canAdd ) {
 	$sql = "INSERT INTO $eventsTable 
-	(`name`, `user_id`, `updated`, `date`, `location`, `forum_url`, `desc`) 
+	(`name`, `user_id`, `updated`, `date`, `location`, `forum_url`, `desc`, `inactive`) 
 	VALUES 
-	('$name', {$user->data['user_id']}, CURRENT_TIMESTAMP, '$mysqldate', '$location', '$forum', '$desc');";
+	('$name', {$user->data['user_id']}, CURRENT_TIMESTAMP, '$mysqldate', '$location', '$forum', '$desc', $inactive);";
 	
 	$result = $db->sql_query($sql);
 	$db->sql_freeresult($result);
 }
 //Edit
 if( isset($_GET["edit"]) && $canAdd ) {
-	$admin = $adminMod ? 1 : 0;
 	$event_id = filter_input(INPUT_GET, 'edit', FILTER_SANITIZE_NUMBER_INT);
 	
-	$sql = "SELECT `id`, `name`, `user_id`, `updated`, `date`, `location`, `forum_url`, `desc`
+	$sql = "SELECT `id`, `name`, `user_id`, `updated`, `date`, `location`, `forum_url`, `desc`, `inactive` 
 		FROM $eventsTable WHERE id = $event_id AND (user_id = {$user->data['user_id']} OR 1 = $admin);";
 	
 	//Set some default values
@@ -135,6 +142,7 @@ if( isset($_GET["edit"]) && $canAdd ) {
 		"forum_url" => '',
 		"location" => '',
 		"date" => '',
+		"inactive" => '',
 		"edit" => false
 	);
 		
@@ -147,7 +155,8 @@ if( isset($_GET["edit"]) && $canAdd ) {
 			"location" => $row['location'],
 			"date" => $row['date'],
 			"description" => $row['desc'], 
-			"edit" => ($user->data['user_id'] == $row['user_id'] || $adminMod)
+			"edit" => ($user->data['user_id'] == $row['user_id'] || $adminMod),
+			"inactive" => ($row['inactive'] == 1) ? 'checked' : ''
 		);	
 		
 	}	
@@ -248,6 +257,17 @@ if( isset($_GET["edit"]) && $canAdd ) {
 		</div>
 		--> 
 
+		<!-- Multiple Checkboxes (inline) -->
+		<div class="control-group">
+		  <label class="control-label"></label>
+		  <div class="controls">
+			<label class="checkbox inline">
+			  <input type="checkbox" name="deactivated" value="Dold i listan" <?= $edit_event["inactive"] ?>>
+			  Dold i listan
+			</label>
+		  </div>
+		</div>		
+
 		<!-- Button (Double) -->
 		<div class="control-group">
 		  <label class="control-label"></label>
@@ -279,10 +299,11 @@ if( isset($_GET["edit"]) && $canAdd ) {
 */
 
 //Show a list of active events in the future
-$sql = 'SELECT id, name, location, date, forum_url, user_id
-	FROM ' . $eventsTable . '
-	WHERE inactive = 0 AND date > CURRENT_TIMESTAMP	
-	ORDER BY date ASC';
+$sql = "SELECT e.id, e.name, e.location, e.date, e.forum_url, e.user_id, e.inactive, u.username 
+	FROM  $eventsTable e 
+	LEFT JOIN " . USERS_TABLE . " u ON (u.user_id = e.user_id) 
+	WHERE (e.inactive = 0 OR (u.user_id = e.user_id OR 1 = $admin)) AND date > CURRENT_TIMESTAMP	
+	ORDER BY date ASC";
 
 $result = $db->sql_query($sql);
 
@@ -290,7 +311,7 @@ $events = array();
 echo "<table>\n";
 echo "<tr><th>Datum</th><th>Namn</th><th>Länk</th><th>Plats</th><th>iCal</th><th></th></tr>\n";
 while ($row = $db->sql_fetchrow($result)) {
-	echo "\t<tr>\n";
+	echo "\t<tr" . (($row['inactive'] == 1) ? " class='inactive'" : "") . ">\n";
 	echo "\t<td>" . $row['date'] . "</td>\n";
 	echo "\t<td><a href='?event=" . $row['id'] . "'>" . $row['name'] . "</a></td>\n";
 	echo "\t<td><a href='" . $row['forum_url'] . "'>Forumtråd</a></td>\n";
@@ -306,7 +327,8 @@ while ($row = $db->sql_fetchrow($result)) {
 		"forum_url" => $row['forum_url'],
 		"location" => $row['location'],
 		"date" => $row['date'],
-		"edit" => ($user->data['user_type'] == $row['user_id'] || $adminMod)
+		"edit" => ($user->data['user_type'] == $row['user_id'] || $adminMod), 
+		"inactive" => ($row['inactive'] == 1)
 	);	
 }
 echo "</table>\n";
@@ -328,17 +350,18 @@ $event_id = filter_input(INPUT_GET, 'event', FILTER_SANITIZE_NUMBER_INT);
 
 if( $event_id ) {
 
-	$sql = 'SELECT e.id, name, e.location, e.date, e.updated,  e.desc, e.forum_url, e.user_id, u.username 
-		FROM ' . $eventsTable . ' e 
-		LEFT JOIN ' . USERS_TABLE . ' u ON (u.user_id = e.user_id) 
-		WHERE e.inactive = 0 AND e.id = ' . $event_id . '
-		ORDER BY e.date ASC';
+	$sql = "SELECT e.id, name, e.location, e.date, e.updated,  e.desc, e.forum_url, e.user_id, u.username, e.inactive 
+		FROM  $eventsTable e 
+		LEFT JOIN " . USERS_TABLE . " u ON (u.user_id = e.user_id) 
+		WHERE (e.inactive = 0 OR (u.user_id = e.user_id OR 1 = $admin)) AND e.id = $event_id 
+		ORDER BY e.date ASC";
 
 		
 	$result = $db->sql_query($sql);
 	while ($row = $db->sql_fetchrow($result)) {
 
 		echo "<h2>" .  $row['name'] . "</h2>\n";
+		if($row['inactive'] == 1) echo "<em>Dold i listan</em>\n";
 		echo "<strong>" .  $row['date'] . "</strong>\n";
 		echo "<button data-location='" . $row['location'] . "' class='loc'>Visa på karta</button>\n";
 		echo "<a href='" . $row['forum_url'] . "'>Forumtråd</a>\n";
